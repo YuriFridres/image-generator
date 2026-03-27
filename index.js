@@ -6,16 +6,21 @@ const https = require('https');
 const app = express();
 app.use(express.json({ limit: '50mb' }));
 
-async function downloadImage(url) {
+async function downloadImage(imageUrl) {
   return new Promise((resolve, reject) => {
-    https.get(url, (res) => {
+    const timeout = setTimeout(() => reject(new Error('Timeout ao baixar imagem')), 30000);
+    https.get(imageUrl, (res) => {
+      clearTimeout(timeout);
       if (res.statusCode === 301 || res.statusCode === 302) {
         return downloadImage(res.headers.location).then(resolve).catch(reject);
       }
       const chunks = [];
       res.on('data', chunk => chunks.push(chunk));
       res.on('end', () => resolve(Buffer.concat(chunks)));
-    }).on('error', reject);
+    }).on('error', (err) => {
+      clearTimeout(timeout);
+      reject(err);
+    });
   });
 }
 
