@@ -73,7 +73,7 @@ app.post('/gerar-imagem', async (req, res) => {
     const imageUrl = `https://image.pollinations.ai/prompt/${tema}?width=1080&height=1350&nologo=true&seed=${Date.now()}`;
 
     console.log('Baixando imagem:', imageUrl);
-    const imgBuffer = await downloadImage(imageUrl, 90000);
+    const imgBuffer = await downloadImage(imageUrl, 180000);
 
     const header = imgBuffer.slice(0, 4).toString('hex');
     const isValid = header.startsWith('89504e47') || header.startsWith('ffd8ff');
@@ -113,4 +113,5 @@ app.post('/gerar-imagem', async (req, res) => {
   }
 });
 
-app.listen(process.env.PORT || 3000, () => console.log('Rodando!'));
+const server = app.listen(process.env.PORT || 3000, () => console.log('Rodando!'));
+server.timeout = 300000; // 5 minutos
