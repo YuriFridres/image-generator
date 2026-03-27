@@ -1,17 +1,43 @@
 const express = require('express');
 const { createCanvas, loadImage } = require('@napi-rs/canvas');
 const sharp = require('sharp');
+const https = require('https');
 
 const app = express();
 app.use(express.json({ limit: '50mb' }));
 
+async function downloadImage(url) {
+  return new Promise((resolve, reject) => {
+    https.get(url, (res) => {
+      if (res.statusCode === 301 || res.statusCode === 302) {
+        return downloadImage(res.headers.location).then(resolve).catch(reject);
+      }
+      const chunks = [];
+      res.on('data', chunk => chunks.push(chunk));
+      res.on('end', () => resolve(Buffer.concat(chunks)));
+    }).on('error', reject);
+  });
+}
+
 app.post('/gerar-imagem', async (req, res) => {
   try {
-    const { imageBase64, titulo } = req.body;
+    const { titulo } = req.body;
     const WIDTH = 1080;
     const HEIGHT = 1350;
 
-    const imgBuffer = Buffer.from(imageBase64, 'base64');
+    // Gera imagem com Pollinations
+    const tema = encodeURIComponent(`spiritual divine light healing energy mystical nature ${titulo} high quality`);
+    const imageUrl = `https://image.pollinations.ai/prompt/${tema}?width=1080&height=1350&nologo=true&seed=${Date.now()}`;
+
+    const imgBuffer = await downloadImage(imageUrl);
+
+    // Verifica se é imagem válida
+    const header = imgBuffer.slice(0, 4).toString('hex');
+    const isValid = header.startsWith('89504e47') || header.startsWith('ffd8ff');
+    if (!isValid) {
+      return res.status(400).json({ error: 'Imagem inválida do Pollinations', header });
+    }
+
     const bgBuffer = await sharp(imgBuffer)
       .resize(WIDTH, HEIGHT, { fit: 'cover' })
       .toBuffer();
