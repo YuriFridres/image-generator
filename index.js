@@ -6,11 +6,11 @@ const https = require('https');
 const app = express();
 app.use(express.json({ limit: '50mb' }));
 
-async function downloadImage(imageUrl, timeout = 60000) {
+async function downloadImage(imageUrl, timeout = 120000) {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error('Timeout')), timeout);
     const get = (u) => {
-      https.get(u, { timeout: 60000 }, (res) => {
+      https.get(u, { timeout: 120000 }, (res) => {
         if (res.statusCode === 301 || res.statusCode === 302) {
           clearTimeout(timer);
           return get(res.headers.location);
@@ -68,50 +68,40 @@ app.post('/gerar-imagem', async (req, res) => {
   const HEIGHT = 1350;
   const { titulo } = req.body;
 
-  try {
-    const tema = encodeURIComponent(`spiritual divine light healing mystical ${titulo}`);
-    const imageUrl = `https://image.pollinations.ai/prompt/${tema}?width=1080&height=1350&nologo=true&seed=${Date.now()}`;
+  const canvas = createCanvas(WIDTH, HEIGHT);
+  const ctx = canvas.getContext('2d');
 
-    console.log('Baixando imagem:', imageUrl);
-    const imgBuffer = await downloadImage(imageUrl, 180000);
+  try {
+    // Usa modelo turbo — muito mais rápido
+    const tema = encodeURIComponent(`spiritual divine light healing mystical energy ${titulo}`);
+    const seed = Math.floor(Math.random() * 999999);
+    const imageUrl = `https://image.pollinations.ai/prompt/${tema}?width=1080&height=1350&nologo=true&model=turbo&seed=${seed}`;
+
+    console.log('Gerando imagem turbo:', imageUrl);
+    const imgBuffer = await downloadImage(imageUrl, 120000);
 
     const header = imgBuffer.slice(0, 4).toString('hex');
     const isValid = header.startsWith('89504e47') || header.startsWith('ffd8ff');
-
-    const canvas = createCanvas(WIDTH, HEIGHT);
-    const ctx = canvas.getContext('2d');
+    console.log('Header:', header, 'Válido:', isValid);
 
     if (isValid) {
       const bgBuffer = await sharp(imgBuffer).resize(WIDTH, HEIGHT, { fit: 'cover' }).toBuffer();
       const bgImage = await loadImage(bgBuffer);
       ctx.drawImage(bgImage, 0, 0, WIDTH, HEIGHT);
     } else {
-      // Fundo roxo sólido como fallback
       ctx.fillStyle = '#43265F';
       ctx.fillRect(0, 0, WIDTH, HEIGHT);
     }
-
-    drawDesign(ctx, WIDTH, HEIGHT, titulo);
-
-    res.set('Content-Type', 'image/png');
-    res.send(canvas.toBuffer('image/png'));
-
   } catch (err) {
-    console.error('Erro:', err.message);
-    // Fallback: retorna imagem com fundo roxo mesmo com erro
-    try {
-      const canvas = createCanvas(WIDTH, HEIGHT);
-      const ctx = canvas.getContext('2d');
-      ctx.fillStyle = '#43265F';
-      ctx.fillRect(0, 0, WIDTH, HEIGHT);
-      drawDesign(ctx, WIDTH, HEIGHT, titulo || 'Terapias de Luz');
-      res.set('Content-Type', 'image/png');
-      res.send(canvas.toBuffer('image/png'));
-    } catch (e) {
-      res.status(500).json({ error: e.message });
-    }
+    console.error('Erro ao gerar imagem:', err.message);
+    ctx.fillStyle = '#43265F';
+    ctx.fillRect(0, 0, WIDTH, HEIGHT);
   }
+
+  drawDesign(ctx, WIDTH, HEIGHT, titulo || 'Terapias de Luz');
+  res.set('Content-Type', 'image/png');
+  res.send(canvas.toBuffer('image/png'));
 });
 
 const server = app.listen(process.env.PORT || 3000, () => console.log('Rodando!'));
-server.timeout = 300000; // 5 minutos
+server.timeout = 300000;
