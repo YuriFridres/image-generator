@@ -1,39 +1,62 @@
 const express = require('express');
-const { createCanvas, loadImage } = require('@napi-rs/canvas');
-const sharp = require('sharp');
-const https = require('https');
+const { createCanvas } = require('@napi-rs/canvas');
 
 const app = express();
-app.use(express.json({ limit: '50mb' }));
-
-async function downloadImage(imageUrl, timeout = 120000) {
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error('Timeout')), timeout);
-    const get = (u) => {
-      https.get(u, { timeout: 120000 }, (res) => {
-        if (res.statusCode === 301 || res.statusCode === 302) {
-          clearTimeout(timer);
-          return get(res.headers.location);
-        }
-        const chunks = [];
-        res.on('data', chunk => chunks.push(chunk));
-        res.on('end', () => { clearTimeout(timer); resolve(Buffer.concat(chunks)); });
-        res.on('error', (e) => { clearTimeout(timer); reject(e); });
-      }).on('error', (e) => { clearTimeout(timer); reject(e); });
-    };
-    get(imageUrl);
-  });
-}
+app.use(express.json({ limit: '10mb' }));
 
 function drawDesign(ctx, WIDTH, HEIGHT, titulo) {
-  const gradient = ctx.createLinearGradient(0, HEIGHT * 0.5, 0, HEIGHT);
-  gradient.addColorStop(0, 'rgba(0,0,0,0)');
-  gradient.addColorStop(1, 'rgba(67,38,95,0.95)');
-  ctx.fillStyle = gradient;
+  // Fundo gradiente espiritual
+  const bg = ctx.createLinearGradient(0, 0, WIDTH, HEIGHT);
+  bg.addColorStop(0, '#1a0533');
+  bg.addColorStop(0.4, '#43265F');
+  bg.addColorStop(0.7, '#2d1b4e');
+  bg.addColorStop(1, '#0d0120');
+  ctx.fillStyle = bg;
   ctx.fillRect(0, 0, WIDTH, HEIGHT);
 
+  // Círculos de luz
+  const addGlow = (x, y, r, color) => {
+    const grd = ctx.createRadialGradient(x, y, 0, x, y, r);
+    grd.addColorStop(0, color);
+    grd.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = grd;
+    ctx.fillRect(0, 0, WIDTH, HEIGHT);
+  };
+  addGlow(WIDTH * 0.7, HEIGHT * 0.25, 400, 'rgba(180,100,255,0.3)');
+  addGlow(WIDTH * 0.2, HEIGHT * 0.5, 350, 'rgba(100,50,200,0.25)');
+  addGlow(WIDTH * 0.5, HEIGHT * 0.1, 300, 'rgba(255,200,100,0.15)');
+
+  // Estrelas
+  ctx.fillStyle = 'rgba(255,255,255,0.8)';
+  for (let i = 0; i < 120; i++) {
+    const x = Math.random() * WIDTH;
+    const y = Math.random() * HEIGHT * 0.7;
+    const r = Math.random() * 2.5;
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Gradiente inferior
+  const overlay = ctx.createLinearGradient(0, HEIGHT * 0.45, 0, HEIGHT);
+  overlay.addColorStop(0, 'rgba(0,0,0,0)');
+  overlay.addColorStop(1, 'rgba(30,5,60,0.97)');
+  ctx.fillStyle = overlay;
+  ctx.fillRect(0, 0, WIDTH, HEIGHT);
+
+  // Linha decorativa
+  ctx.strokeStyle = 'rgba(180,100,255,0.5)';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(60, HEIGHT - 240);
+  ctx.lineTo(WIDTH - 60, HEIGHT - 240);
+  ctx.stroke();
+
+  // Título
   ctx.fillStyle = 'white';
-  ctx.font = 'bold 80px sans-serif';
+  ctx.font = 'bold 82px sans-serif';
+  ctx.shadowColor = 'rgba(180,100,255,0.8)';
+  ctx.shadowBlur = 20;
   const maxWidth = WIDTH - 120;
   const words = titulo.toUpperCase().split(' ');
   let lines = [], currentLine = '';
@@ -48,19 +71,18 @@ function drawDesign(ctx, WIDTH, HEIGHT, titulo) {
   }
   lines.push(currentLine);
 
-  const lineHeight = 95;
-  let startY = HEIGHT - 180 - (lines.length * lineHeight);
+  const lineHeight = 98;
+  let startY = HEIGHT - 160 - (lines.length * lineHeight);
   for (const line of lines) {
-    ctx.shadowColor = 'rgba(0,0,0,0.8)';
-    ctx.shadowBlur = 10;
     ctx.fillText(line, 60, startY);
     startY += lineHeight;
   }
 
-  ctx.font = '28px sans-serif';
-  ctx.fillStyle = 'rgba(255,255,255,0.8)';
+  // Logo
+  ctx.font = '26px sans-serif';
+  ctx.fillStyle = 'rgba(200,150,255,0.9)';
   ctx.shadowBlur = 0;
-  ctx.fillText('@INSTITUTOTERAPIASDELUZ', 60, HEIGHT - 80);
+  ctx.fillText('@INSTITUTOTERAPIASDELUZ', 60, HEIGHT - 70);
 }
 
 app.post('/gerar-imagem', async (req, res) => {
@@ -71,38 +93,21 @@ app.post('/gerar-imagem', async (req, res) => {
   const canvas = createCanvas(WIDTH, HEIGHT);
   const ctx = canvas.getContext('2d');
 
-  try {
-    // Usa modelo turbo — muito mais rápido
-    // Unsplash - sempre funciona, imagens espirituais/natureza
-const temas = ['spiritual,meditation,light', 'nature,forest,light', 'universe,cosmos,stars', 'healing,nature,peace', 'energy,light,divine'];
-const temaAleatorio = temas[Math.floor(Math.random() * temas.length)];
-const imageUrl = `https://source.unsplash.com/1080x1350/?${temaAleatorio}&sig=${Date.now()}`;
-
-    console.log('Gerando imagem turbo:', imageUrl);
-    const imgBuffer = await downloadImage(imageUrl, 120000);
-
-    const header = imgBuffer.slice(0, 4).toString('hex');
-    const isValid = header.startsWith('89504e47') || header.startsWith('ffd8ff');
-    console.log('Header:', header, 'Válido:', isValid);
-
-    if (isValid) {
-      const bgBuffer = await sharp(imgBuffer).resize(WIDTH, HEIGHT, { fit: 'cover' }).toBuffer();
-      const bgImage = await loadImage(bgBuffer);
-      ctx.drawImage(bgImage, 0, 0, WIDTH, HEIGHT);
-    } else {
-      ctx.fillStyle = '#43265F';
-      ctx.fillRect(0, 0, WIDTH, HEIGHT);
-    }
-  } catch (err) {
-    console.error('Erro ao gerar imagem:', err.message);
-    ctx.fillStyle = '#43265F';
-    ctx.fillRect(0, 0, WIDTH, HEIGHT);
-  }
+  // Seed para estrelas consistentes por título
+  Math.seedrandom = (seed) => {
+    let s = seed;
+    Math.random = () => {
+      s = (s * 9301 + 49297) % 233280;
+      return s / 233280;
+    };
+  };
+  if (titulo) Math.seedrandom(titulo.length * 137);
 
   drawDesign(ctx, WIDTH, HEIGHT, titulo || 'Terapias de Luz');
+
   res.set('Content-Type', 'image/png');
   res.send(canvas.toBuffer('image/png'));
 });
 
 const server = app.listen(process.env.PORT || 3000, () => console.log('Rodando!'));
-server.timeout = 300000;
+server.timeout = 30000;
