@@ -73,9 +73,10 @@ app.post('/gerar-imagem', async (req, res) => {
 
   try {
     // Usa modelo turbo — muito mais rápido
-    const tema = encodeURIComponent(`spiritual divine light healing mystical energy ${titulo}`);
-    const seed = Math.floor(Math.random() * 999999);
-    const imageUrl = `https://image.pollinations.ai/prompt/${tema}?width=1080&height=1350&nologo=true&model=turbo&seed=${seed}`;
+    // Unsplash - sempre funciona, imagens espirituais/natureza
+const temas = ['spiritual,meditation,light', 'nature,forest,light', 'universe,cosmos,stars', 'healing,nature,peace', 'energy,light,divine'];
+const temaAleatorio = temas[Math.floor(Math.random() * temas.length)];
+const imageUrl = `https://source.unsplash.com/1080x1350/?${temaAleatorio}&sig=${Date.now()}`;
 
     console.log('Gerando imagem turbo:', imageUrl);
     const imgBuffer = await downloadImage(imageUrl, 120000);
